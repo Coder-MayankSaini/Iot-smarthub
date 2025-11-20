@@ -84,10 +84,13 @@ export const toggleRelayRequest = async (ip: string, relayIndex: number): Promis
   // It returns a 303 redirect to /, which fetch follows automatically usually.
   try {
     const baseUrl = getBaseUrl(ip);
+    const url = `${baseUrl}/toggle?r=${relayIndex}`;
+    console.log(`[ESP32] Toggling: ${url}`);
     
-    await fetch(`${baseUrl}/toggle?r=${relayIndex}`, {
+    await fetch(url, {
       method: 'GET',
       mode: 'no-cors', // Often fire-and-forget for IoT if CORS is strict
+      keepalive: true,
     });
   } catch (error) {
     console.error(`Failed to toggle relay ${relayIndex} at ${ip}`, error);

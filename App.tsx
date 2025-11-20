@@ -97,9 +97,11 @@ const App: React.FC = () => {
         }
       } catch (error) {
         console.error("Toggle request failed:", error);
-        // Revert on failure
-        setRelays(prev => prev.map(r => r.id === id ? { ...r, state: !r.state } : r));
-        alert("Failed to toggle relay. Check connection.");
+        // Revert on failure after a delay so user sees the attempt
+        setTimeout(() => {
+             setRelays(prev => prev.map(r => r.id === id ? { ...r, state: !r.state } : r));
+             // Optional: Show error toast/message here
+        }, 500);
       }
     }
   };
