@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Settings, Wifi, WifiOff, Loader2, AlertTriangle } from 'lucide-react';
+import { Settings, Wifi, WifiOff, Loader2, AlertTriangle, Monitor } from 'lucide-react';
 import { Relay, ConnectionStatus, AppSettings, EnergyData } from './types';
 import RelayCard from './components/RelayCard';
 import VoiceControl from './components/VoiceControl';
 import EnergyChart from './components/EnergyChart';
-import { fetchRelayStatus, toggleRelayRequest } from './services/esp32';
+import { fetchRelayStatus, toggleRelayRequest, updateLcdText } from './services/esp32';
 
 const DEFAULT_IP = "172.16.234.150";
 
@@ -25,6 +25,10 @@ const App: React.FC = () => {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(ConnectionStatus.CONNECTING);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [energyData, setEnergyData] = useState<EnergyData[]>([]);
+  
+  // LCD State
+  const [lcdText, setLcdText] = useState('');
+  const [isSendingLcd, setIsSendingLcd] = useState(false);
 
   // Generate mock energy data
   useEffect(() => {
@@ -100,6 +104,27 @@ const App: React.FC = () => {
         setRelays(prev => prev.map(r => r.id === id ? { ...r, state: !r.state } : r));
         alert("Failed to toggle relay. Check connection.");
       }
+    }
+  };
+
+  const handleLcdSubmit = async () => {
+    if (!lcdText.trim()) return;
+    
+    setIsSendingLcd(true);
+    try {
+      if (!settings.useDemoMode) {
+        await updateLcdText(settings.ipAddress, lcdText);
+      } else {
+        // Simulate delay in demo mode
+        await new Promise(resolve => setTimeout(resolve, 800));
+      }
+      
+      setLcdText('');
+    } catch (error) {
+      console.error(error);
+      alert("Failed to send message to LCD");
+    } finally {
+      setIsSendingLcd(false);
     }
   };
 
@@ -185,6 +210,46 @@ const App: React.FC = () => {
         {/* Stats Section */}
         <section>
           <EnergyChart data={energyData} />
+        </section>
+
+        {/* LCD Control Section */}
+        <section>
+          <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+            <Monitor className="w-6 h-6 text-slate-700" />
+            LCD Messenger
+          </h2>
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <div className="flex flex-col sm:flex-row gap-4 items-end">
+              <div className="w-full flex-1">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Display Text (Max 32 chars)
+                </label>
+                <input 
+                  type="text" 
+                  maxLength={32}
+                  value={lcdText}
+                  onChange={(e) => setLcdText(e.target.value)}
+                  placeholder="Enter message to display..."
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleLcdSubmit();
+                    }
+                  }}
+                />
+              </div>
+              <button 
+                onClick={handleLcdSubmit}
+                disabled={isSendingLcd || !lcdText.trim()}
+                className="w-full sm:w-auto px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 min-w-[140px] h-[42px]"
+              >
+                {isSendingLcd ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Update Display'}
+              </button>
+            </div>
+            <p className="text-xs text-slate-400 mt-2">
+              Sends text to the connected I2C LCD display.
+            </p>
+          </div>
         </section>
 
         {/* Relays Grid */}

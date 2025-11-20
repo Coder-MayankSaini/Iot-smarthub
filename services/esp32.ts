@@ -76,6 +76,23 @@ export const toggleRelayRequest = async (ip: string, relayIndex: number): Promis
   }
 };
 
+export const updateLcdText = async (ip: string, text: string): Promise<void> => {
+  try {
+    const baseUrl = getBaseUrl(ip);
+    const params = new URLSearchParams({ text: text });
+    
+    // Assumes the ESP32 uses a handler like server.on("/lcd", ...) or checks for "text" arg
+    // Mode 'no-cors' allows sending the request without waiting for a CORS-compliant response
+    await fetch(`${baseUrl}/lcd?${params.toString()}`, {
+      method: 'GET',
+      mode: 'no-cors',
+    });
+  } catch (error) {
+    console.error(`Failed to update LCD at ${ip}`, error);
+    throw error;
+  }
+};
+
 // Mock data generator for demo mode
 export const getMockStatus = (currentRelays: Relay[]): Relay[] => {
   return currentRelays.map(r => ({ ...r, isLoading: false }));
