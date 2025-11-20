@@ -36,62 +36,78 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
       const recognitionInstance = new SpeechRecognition();
       recognitionInstance.continuous = true; // Enable continuous listening
       recognitionInstance.lang = 'en-US';
-      recognitionInstance.interimResults = false;
+      recognitionInstance.interimResults = true; // Enable interim results for real-time feedback
 
       recognitionInstance.onstart = () => {
         setIsListening(true);
         setError(null);
-        setFeedback(null);
       };
       
       recognitionInstance.onend = () => {
-        setIsListening(false);
+        // Don't set isListening to false immediately if we intend to restart
+        // This prevents UI flickering
+        if (!isAlwaysListeningRef.current) {
+            setIsListening(false);
+        }
+        
         // Auto-restart if we are in "Always Listening" mode
         if (isAlwaysListeningRef.current) {
-             // Small delay to prevent CPU hogging if it crashes repeatedly
              setTimeout(() => {
                  try {
                      recognitionInstance.start();
                  } catch (e) {
-                     console.log("Restart ignored", e);
+                     // console.log("Restart ignored", e);
                  }
              }, 200);
         }
       };
       
       recognitionInstance.onerror = (event: any) => {
-        console.error("Speech error", event.error);
+        if (event.error === 'no-speech') return;
         if (event.error === 'not-allowed') {
             setError("Microphone access denied");
-            isAlwaysListeningRef.current = false; // Stop loop if denied
-        } else if (event.error === 'no-speech') {
-            // Ignore no-speech errors visually
+            isAlwaysListeningRef.current = false;
+            setIsListening(false);
         } else {
-           // Other errors
+            console.error("Speech error", event.error);
         }
       };
 
       recognitionInstance.onresult = (event: any) => {
-        // Handle continuous results
+        let finalTranscript = '';
+        let interimTranscript = '';
+
         for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
-                const cmd = event.results[i][0].transcript.toLowerCase().trim();
-                console.log("Voice input:", cmd);
-                setTranscript(cmd);
-                
-                // Check for Wake Word
-                if (checkForWakeWord(cmd)) {
-                    setFeedback("I'm listening...");
-                    // If the wake word is present, process the whole string for commands
-                    // E.g. "Hey Mewmew turn on light"
-                    processCommand(cmd, onCommandRef.current);
-                } else {
-                    // Optional: Log ignored commands
-                    // console.log("Ignored (No wake word)");
-                }
-
-                setTimeout(() => setTranscript(''), 3000);
+                finalTranscript += event.results[i][0].transcript;
+            } else {
+                interimTranscript += event.results[i][0].transcript;
             }
+        }
+
+        // Show what we hear in real-time
+        if (interimTranscript) setTranscript(interimTranscript);
+        
+        if (finalTranscript) {
+            const cmd = finalTranscript.toLowerCase().trim();
+            console.log("Final Voice Input:", cmd);
+            setTranscript(cmd); // Show final text
+            
+            // Check for Wake Word
+            // We process the command if it contains the wake word OR if we are currently processing a continuous flow
+            // But for simplicity, let's stick to requiring the wake word or just being lenient.
+            if (checkForWakeWord(cmd)) {
+                setFeedback("Wake word detected!");
+                processCommand(cmd, onCommandRef.current);
+            } else {
+                console.log("Ignored: No wake word in", cmd);
+            }
+            
+            // Clear after delay
+            setTimeout(() => {
+                setTranscript('');
+                setFeedback(null);
+            }, 3000);
         }
       };
 
@@ -104,13 +120,17 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
   }, []);
 
   const checkForWakeWord = (text: string): boolean => {
-      // Wake word variations
+      // Wake word variations - Broadened to catch misinterpretations
       const patterns = [
-          /hey\s+mew\s*mew/i,
-          /hey\s+mu\s*mu/i,
-          /hey\s+new\s*new/i,
-          /hey\s+meow\s*meow/i,
-          /hi\s+mew\s*mew/i
+          /hey\s+mew/i,       // Catch "hey mew"
+          /hey\s+mu/i,        // Catch "hey mu"
+          /hey\s+new/i,       // Catch "hey new"
+          /hey\s+you/i,       // Catch "hey you" (common mishear)
+          /hey\s+me/i,        // Catch "hey me"
+          /hey\s+menu/i,      // Catch "hey menu"
+          /mew\s*mew/i,       // Just "mew mew" without hey
+          /hello\s+mew/i,
+          /ok\s+mew/i
       ];
       return patterns.some(p => p.test(text));
   };
