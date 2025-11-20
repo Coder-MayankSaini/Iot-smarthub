@@ -31,14 +31,13 @@ export const fetchRelayStatus = async (ip: string): Promise<boolean[]> => {
     
     // In a real scenario without a proxy, this might hit CORS issues if the ESP32
     // doesn't send Access-Control-Allow-Origin headers.
-    // For this demo, we assume the user might use a proxy or the ESP32 is configured correctly.
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), 3000); // 3s timeout
 
     const response = await fetch(`${baseUrl}/`, {
       method: 'GET',
       signal: controller.signal,
-      mode: 'cors', // This requires ESP32 to handle CORS headers.
+      mode: 'cors', // This requires ESP32 to send Access-Control-Allow-Origin header
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
@@ -55,7 +54,7 @@ export const fetchRelayStatus = async (ip: string): Promise<boolean[]> => {
     const text = await response.text();
     return parseRelayStatus(text);
   } catch (error) {
-    console.error(`Failed to fetch ESP32 status from ${ip}`, error);
+    console.error(`Failed to fetch ESP32 status from ${ip}. \nPossible causes:\n1. ESP32 is offline.\n2. CORS is not enabled on ESP32 (Check Arduino code).\n3. Mixed Content (HTTPS calling HTTP).`, error);
     throw error;
   }
 };
@@ -79,13 +78,20 @@ export const toggleRelayRequest = async (ip: string, relayIndex: number): Promis
 export const updateLcdText = async (ip: string, text: string): Promise<void> => {
   try {
     const baseUrl = getBaseUrl(ip);
-    const params = new URLSearchParams({ text: text });
     
-    // Assumes the ESP32 uses a handler like server.on("/lcd", ...) or checks for "text" arg
-    // Mode 'no-cors' allows sending the request without waiting for a CORS-compliant response
-    await fetch(`${baseUrl}/lcd?${params.toString()}`, {
-      method: 'GET',
-      mode: 'no-cors',
+    // The ESP32 code uses: server.on("/lcd", HTTP_POST, handleLCD);
+    // It reads parameters using server.arg("text").
+    // We must send a POST request with x-www-form-urlencoded body.
+    const body = new URLSearchParams();
+    body.append('text', text);
+
+    await fetch(`${baseUrl}/lcd`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: body,
+      mode: 'no-cors', // Result is a 303 redirect, which is opaque in no-cors mode
     });
   } catch (error) {
     console.error(`Failed to update LCD at ${ip}`, error);
