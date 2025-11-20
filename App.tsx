@@ -329,4 +329,30 @@ const App: React.FC = () => {
                 />
               </div>
 
-              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <span className="text-sm font-medium text-slate-700">Demo Mode</span>
+                <button 
+                  onClick={() => setSettings(s => ({...s, useDemoMode: !s.useDemoMode}))}
+                  className={`w-11 h-6 flex items-center rounded-full px-1 transition-colors ${settings.useDemoMode ? 'bg-blue-600' : 'bg-slate-300'}`}
+                >
+                  <div className={`w-4 h-4 bg-white rounded-full transition-transform ${settings.useDemoMode ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button 
+                onClick={() => setIsSettingsOpen(false)}
+                className="px-4 py-2 text-slate-600 hover:text-slate-800 font-medium transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;
