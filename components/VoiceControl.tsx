@@ -20,11 +20,33 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(true);
+  // State to track if the assistant is "awake" and accepting commands
+  const [isAwake, setIsAwake] = useState(false);
+  const awakeTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Store onCommand in a ref
   const onCommandRef = React.useRef(onCommand);
   // Ref to track if we should auto-restart (Always Listening mode)
   const isAlwaysListeningRef = useRef(false);
+
+  // Ref to track awake state inside the event listener closure
+  const isAwakeRef = useRef(false);
+
+  const activateAwakeMode = () => {
+      setIsAwake(true);
+      isAwakeRef.current = true;
+      setFeedback("I'm listening...");
+      
+      // Reset timer if already running
+      if (awakeTimerRef.current) clearTimeout(awakeTimerRef.current);
+      
+      // Stay awake for 10 seconds
+      awakeTimerRef.current = setTimeout(() => {
+          setIsAwake(false);
+          isAwakeRef.current = false;
+          setFeedback(null);
+      }, 10000);
+  };
 
   useEffect(() => {
     onCommandRef.current = onCommand;
@@ -85,28 +107,37 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
             }
         }
 
-        // Show what we hear in real-time
         if (interimTranscript) setTranscript(interimTranscript);
         
         if (finalTranscript) {
             const cmd = finalTranscript.toLowerCase().trim();
             console.log("Final Voice Input:", cmd);
-            setTranscript(cmd); // Show final text
+            setTranscript(cmd);
+
+            // Logic:
+            // 1. Check if wake word is present in this phrase
+            // 2. OR check if we are already in "Awake" state from a previous phrase
             
-            // Check for Wake Word
-            // We process the command if it contains the wake word OR if we are currently processing a continuous flow
-            // But for simplicity, let's stick to requiring the wake word or just being lenient.
-            if (checkForWakeWord(cmd)) {
-                setFeedback("Wake word detected!");
+            const hasWakeWord = checkForWakeWord(cmd);
+            
+            if (hasWakeWord) {
+                console.log("Wake word detected!");
+                activateAwakeMode();
+                
+                // If the phrase also contains a command (e.g. "Hey Mewmew turn on light"), process it
+                processCommand(cmd, onCommandRef.current);
+            } else if (isAwakeRef.current) {
+                // We are already awake, so process this as a command
+                console.log("Awake mode active, processing command:", cmd);
                 processCommand(cmd, onCommandRef.current);
             } else {
-                console.log("Ignored: No wake word in", cmd);
+                console.log("Ignored: No wake word and not awake.");
             }
             
-            // Clear after delay
+            // Clear transcript after delay
             setTimeout(() => {
                 setTranscript('');
-                setFeedback(null);
+                if (!isAwakeRef.current) setFeedback(null);
             }, 3000);
         }
       };
@@ -208,7 +239,7 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
         )}
         
         {feedback && (
-          <div className="bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm mb-2 flex items-center gap-2 backdrop-blur-md bg-opacity-90 animate-in slide-in-from-right-5 duration-300">
+          <div className={`text-white px-4 py-2 rounded-lg shadow-lg text-sm mb-2 flex items-center gap-2 backdrop-blur-md bg-opacity-90 animate-in slide-in-from-right-5 duration-300 ${isAwake ? 'bg-purple-600' : 'bg-emerald-500'}`}>
             {feedback === "I'm listening..." ? <Zap className="w-4 h-4 fill-current" /> : <Check className="w-4 h-4" />}
             <span>{feedback}</span>
           </div>
