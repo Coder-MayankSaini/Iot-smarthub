@@ -96,16 +96,31 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
     }
 
     if (relayId !== -1) {
-      // Check for OFF commands first to avoid false positives with "on" inside words (like "one")
-      if (/\boff\b/.test(cmd) || cmd.includes('stop') || cmd.includes('kill') || cmd.includes('deactivate')) {
+      console.log(`Processing command for Relay ${relayId}. Transcript: "${cmd}"`);
+      
+      // Enhanced OFF detection
+      // Matches: "off", "turn off", "switch off", "stop", "kill", "deactivate", "shutdown", "of" (common misinterpretation)
+      const isOff = /\boff\b/.test(cmd) || /\bof\b/.test(cmd) || cmd.includes('stop') || cmd.includes('kill') || cmd.includes('deactivate') || cmd.includes('shutdown');
+      
+      // Enhanced ON detection
+      // Matches: "on", "turn on", "switch on", "start", "active", "enable", "engage"
+      const isOn = /\bon\b/.test(cmd) || cmd.includes('start') || cmd.includes('active') || cmd.includes('enable') || cmd.includes('engage');
+
+      if (isOff) {
+        console.log("Detected OFF command");
         onCommand(relayId, 'off');
         setFeedback(`Turning OFF ${targetName}`);
         setTimeout(() => setFeedback(null), 3000);
-      } else if (/\bon\b/.test(cmd) || cmd.includes('start') || cmd.includes('active') || cmd.includes('enable')) {
+      } else if (isOn) {
+        console.log("Detected ON command");
         onCommand(relayId, 'on');
         setFeedback(`Turning ON ${targetName}`);
         setTimeout(() => setFeedback(null), 3000);
+      } else {
+        console.log("Could not determine action (ON/OFF) from command");
       }
+    } else {
+      console.log("Could not identify target device/relay from command");
     }
   }, [onCommand]);
 
