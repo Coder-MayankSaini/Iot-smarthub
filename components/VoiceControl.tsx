@@ -18,6 +18,7 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
   const [transcript, setTranscript] = useState('');
   const [recognition, setRecognition] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isSupported, setIsSupported] = useState(true);
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -27,12 +28,23 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
       recognitionInstance.lang = 'en-US';
       recognitionInstance.interimResults = false;
 
-      recognitionInstance.onstart = () => setIsListening(true);
+      recognitionInstance.onstart = () => {
+        setIsListening(true);
+        setError(null);
+      };
+      
       recognitionInstance.onend = () => setIsListening(false);
+      
       recognitionInstance.onerror = (event: any) => {
         console.error("Speech error", event.error);
         setIsListening(false);
-        setError("Microphone error");
+        if (event.error === 'not-allowed') {
+            setError("Microphone access denied");
+        } else if (event.error === 'no-speech') {
+            // Ignore no-speech errors visually, just stop listening
+        } else {
+            setError("Microphone error: " + event.error);
+        }
         setTimeout(() => setError(null), 3000);
       };
 
@@ -48,6 +60,7 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
 
       setRecognition(recognitionInstance);
     } else {
+      setIsSupported(false);
       setError("Browser not supported");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -55,49 +68,70 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
 
   const processCommand = useCallback((cmd: string) => {
     let relayId = -1;
-    if (cmd.includes('relay 1') || cmd.includes('one')) relayId = 0;
-    else if (cmd.includes('relay 2') || cmd.includes('two')) relayId = 1;
-    else if (cmd.includes('relay 3') || cmd.includes('three')) relayId = 2;
-    else if (cmd.includes('relay 4') || cmd.includes('four')) relayId = 3;
+    // Simple parsing logic
+    if (cmd.includes('relay 1') || cmd.includes('one') || cmd.includes('light')) relayId = 0;
+    else if (cmd.includes('relay 2') || cmd.includes('two') || cmd.includes('fan')) relayId = 1;
+    else if (cmd.includes('relay 3') || cmd.includes('three') || cmd.includes('socket')) relayId = 2;
+    else if (cmd.includes('relay 4') || cmd.includes('four') || cmd.includes('pump')) relayId = 3;
 
     if (relayId !== -1) {
-      if (cmd.includes('on') || cmd.includes('start')) {
+      if (cmd.includes('on') || cmd.includes('start') || cmd.includes('active')) {
         onCommand(relayId, 'on');
-      } else if (cmd.includes('off') || cmd.includes('stop')) {
+      } else if (cmd.includes('off') || cmd.includes('stop') || cmd.includes('kill')) {
         onCommand(relayId, 'off');
       }
     }
   }, [onCommand]);
 
   const toggleListening = () => {
+    if (!isSupported) {
+      alert("Voice control requires a browser like Google Chrome, Edge, or Safari.");
+      return;
+    }
+
     if (!recognition) return;
-    if (isListening) {
-      recognition.stop();
-    } else {
-      recognition.start();
+
+    try {
+      if (isListening) {
+        recognition.stop();
+      } else {
+        setError(null);
+        recognition.start();
+      }
+    } catch (err) {
+      console.error("Recognition start/stop error", err);
+      // Sometimes start() is called when already started
+      setIsListening(false);
     }
   };
 
-  if (error === "Browser not supported") return null;
-
   return (
-    <div className="fixed bottom-8 right-8 z-50 flex flex-col items-end gap-2">
-      {transcript && (
-        <div className="bg-slate-900 text-white px-4 py-2 rounded-lg shadow-lg text-sm mb-2 animate-fade-in">
-          "{transcript}"
-        </div>
-      )}
-      {error && (
-        <div className="bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm mb-2">
-          {error}
-        </div>
-      )}
+    <div className="fixed bottom-8 right-8 z-50 flex flex-col items-end gap-2 pointer-events-none">
+      {/* Messages Container */}
+      <div className="pointer-events-auto flex flex-col items-end">
+        {transcript && (
+          <div className="bg-slate-900 text-white px-4 py-2 rounded-lg shadow-lg text-sm mb-2 animate-fade-in backdrop-blur-md bg-opacity-90">
+            "{transcript}"
+          </div>
+        )}
+        {error && (
+          <div className="bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm mb-2 flex items-center gap-2 backdrop-blur-md bg-opacity-90">
+             <span>{error}</span>
+          </div>
+        )}
+      </div>
       
+      {/* Main Button */}
       <button
         onClick={toggleListening}
         className={`
+          pointer-events-auto
           relative flex items-center justify-center w-16 h-16 rounded-full shadow-2xl transition-all duration-300
-          ${isListening ? 'bg-red-500 hover:bg-red-600 scale-110' : 'bg-blue-600 hover:bg-blue-700'}
+          ${!isSupported 
+            ? 'bg-slate-400 cursor-not-allowed grayscale' 
+            : isListening 
+              ? 'bg-red-500 hover:bg-red-600 scale-110 shadow-red-500/50' 
+              : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/50'}
         `}
       >
         {isListening ? (
@@ -105,6 +139,8 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
             <span className="absolute w-full h-full rounded-full bg-red-500 animate-ping opacity-75"></span>
             <Activity className="w-8 h-8 text-white relative z-10" />
           </>
+        ) : !isSupported ? (
+          <MicOff className="w-8 h-8 text-slate-200" />
         ) : (
           <Mic className="w-8 h-8 text-white" />
         )}
