@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Mic, MicOff, Activity } from 'lucide-react';
+import { Mic, MicOff, Activity, Check } from 'lucide-react';
 
 interface VoiceControlProps {
   onCommand: (relayId: number, action: 'on' | 'off') => void;
@@ -18,6 +18,7 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
   const [transcript, setTranscript] = useState('');
   const [recognition, setRecognition] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(true);
 
   useEffect(() => {
@@ -31,6 +32,7 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
       recognitionInstance.onstart = () => {
         setIsListening(true);
         setError(null);
+        setFeedback(null);
       };
       
       recognitionInstance.onend = () => setIsListening(false);
@@ -68,17 +70,39 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
 
   const processCommand = useCallback((cmd: string) => {
     let relayId = -1;
-    // Simple parsing logic
-    if (cmd.includes('relay 1') || cmd.includes('one') || cmd.includes('light')) relayId = 0;
-    else if (cmd.includes('relay 2') || cmd.includes('two') || cmd.includes('fan')) relayId = 1;
-    else if (cmd.includes('relay 3') || cmd.includes('three') || cmd.includes('socket')) relayId = 2;
-    else if (cmd.includes('relay 4') || cmd.includes('four') || cmd.includes('pump')) relayId = 3;
+    let targetName = 'Device';
+
+    // Updated parsing logic to match new App names
+    // Relay 0: Living Room Light
+    if (cmd.includes('relay 1') || cmd.includes('one') || cmd.includes('living room')) { 
+        relayId = 0; 
+        targetName = 'Living Room Light';
+    } 
+    // Relay 1: Bedroom Light
+    else if (cmd.includes('relay 2') || cmd.includes('two') || cmd.includes('bedroom light')) { 
+        relayId = 1; 
+        targetName = 'Bedroom Light';
+    } 
+    // Relay 2: Kitchen Light
+    else if (cmd.includes('relay 3') || cmd.includes('three') || cmd.includes('kitchen')) { 
+        relayId = 2; 
+        targetName = 'Kitchen Light';
+    } 
+    // Relay 3: Bedroom Fan
+    else if (cmd.includes('relay 4') || cmd.includes('four') || cmd.includes('fan')) { 
+        relayId = 3; 
+        targetName = 'Bedroom Fan';
+    }
 
     if (relayId !== -1) {
       if (cmd.includes('on') || cmd.includes('start') || cmd.includes('active')) {
         onCommand(relayId, 'on');
+        setFeedback(`Turning ON ${targetName}`);
+        setTimeout(() => setFeedback(null), 3000);
       } else if (cmd.includes('off') || cmd.includes('stop') || cmd.includes('kill')) {
         onCommand(relayId, 'off');
+        setFeedback(`Turning OFF ${targetName}`);
+        setTimeout(() => setFeedback(null), 3000);
       }
     }
   }, [onCommand]);
@@ -96,6 +120,7 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
         recognition.stop();
       } else {
         setError(null);
+        setFeedback(null);
         recognition.start();
       }
     } catch (err) {
@@ -109,11 +134,19 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
     <div className="fixed bottom-8 right-8 z-50 flex flex-col items-end gap-2 pointer-events-none">
       {/* Messages Container */}
       <div className="pointer-events-auto flex flex-col items-end">
-        {transcript && (
+        {transcript && !feedback && (
           <div className="bg-slate-900 text-white px-4 py-2 rounded-lg shadow-lg text-sm mb-2 animate-fade-in backdrop-blur-md bg-opacity-90">
             "{transcript}"
           </div>
         )}
+        
+        {feedback && (
+          <div className="bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm mb-2 flex items-center gap-2 backdrop-blur-md bg-opacity-90 animate-in slide-in-from-right-5 duration-300">
+            <Check className="w-4 h-4" />
+            <span>{feedback}</span>
+          </div>
+        )}
+
         {error && (
           <div className="bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm mb-2 flex items-center gap-2 backdrop-blur-md bg-opacity-90">
              <span>{error}</span>
