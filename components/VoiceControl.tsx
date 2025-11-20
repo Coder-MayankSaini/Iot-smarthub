@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Mic, MicOff, Activity, Check } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Mic, MicOff, Activity, Check, Zap } from 'lucide-react';
 
 interface VoiceControlProps {
   onCommand: (relayId: number, action: 'on' | 'off') => void;
@@ -21,8 +21,11 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(true);
 
-  // Store onCommand in a ref so the event listener always accesses the current version
+  // Store onCommand in a ref
   const onCommandRef = React.useRef(onCommand);
+  // Ref to track if we should auto-restart (Always Listening mode)
+  const isAlwaysListeningRef = useRef(false);
+
   useEffect(() => {
     onCommandRef.current = onCommand;
   }, [onCommand]);
@@ -31,7 +34,7 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       const recognitionInstance = new SpeechRecognition();
-      recognitionInstance.continuous = false;
+      recognitionInstance.continuous = true; // Enable continuous listening
       recognitionInstance.lang = 'en-US';
       recognitionInstance.interimResults = false;
 
@@ -41,32 +44,55 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
         setFeedback(null);
       };
       
-      recognitionInstance.onend = () => setIsListening(false);
+      recognitionInstance.onend = () => {
+        setIsListening(false);
+        // Auto-restart if we are in "Always Listening" mode
+        if (isAlwaysListeningRef.current) {
+             // Small delay to prevent CPU hogging if it crashes repeatedly
+             setTimeout(() => {
+                 try {
+                     recognitionInstance.start();
+                 } catch (e) {
+                     console.log("Restart ignored", e);
+                 }
+             }, 200);
+        }
+      };
       
       recognitionInstance.onerror = (event: any) => {
         console.error("Speech error", event.error);
-        setIsListening(false);
         if (event.error === 'not-allowed') {
             setError("Microphone access denied");
+            isAlwaysListeningRef.current = false; // Stop loop if denied
         } else if (event.error === 'no-speech') {
-            // Ignore no-speech errors visually, just stop listening
+            // Ignore no-speech errors visually
         } else {
-            setError("Microphone error: " + event.error);
+           // Other errors
         }
-        setTimeout(() => setError(null), 3000);
       };
 
       recognitionInstance.onresult = (event: any) => {
-        const current = event.resultIndex;
-        const cmd = event.results[current][0].transcript.toLowerCase();
-        console.log("Voice command received:", cmd);
-        setTranscript(cmd);
-        
-        // Use the ref here to get the latest parsing logic (and latest state closure from App)
-        processCommand(cmd, onCommandRef.current);
-        
-        // Clear transcript after a delay
-        setTimeout(() => setTranscript(''), 3000);
+        // Handle continuous results
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+                const cmd = event.results[i][0].transcript.toLowerCase().trim();
+                console.log("Voice input:", cmd);
+                setTranscript(cmd);
+                
+                // Check for Wake Word
+                if (checkForWakeWord(cmd)) {
+                    setFeedback("I'm listening...");
+                    // If the wake word is present, process the whole string for commands
+                    // E.g. "Hey Mewmew turn on light"
+                    processCommand(cmd, onCommandRef.current);
+                } else {
+                    // Optional: Log ignored commands
+                    // console.log("Ignored (No wake word)");
+                }
+
+                setTimeout(() => setTranscript(''), 3000);
+            }
+        }
       };
 
       setRecognition(recognitionInstance);
@@ -77,11 +103,22 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const checkForWakeWord = (text: string): boolean => {
+      // Wake word variations
+      const patterns = [
+          /hey\s+mew\s*mew/i,
+          /hey\s+mu\s*mu/i,
+          /hey\s+new\s*new/i,
+          /hey\s+meow\s*meow/i,
+          /hi\s+mew\s*mew/i
+      ];
+      return patterns.some(p => p.test(text));
+  };
+
   const processCommand = (cmd: string, commandFn: (relayId: number, action: 'on' | 'off') => void) => {
     let relayId = -1;
     let targetName = 'Device';
 
-    // Updated parsing logic to match new App names
     // Relay 0: Living Room Light
     if (cmd.includes('relay 1') || cmd.includes('one') || cmd.includes('living room')) { 
         relayId = 0; 
@@ -104,8 +141,6 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
     }
 
     if (relayId !== -1) {
-      console.log(`Processing command for Relay ${relayId}. Transcript: "${cmd}"`);
-      
       // Enhanced OFF detection
       const isOff = /\boff\b/.test(cmd) || /\bof\b/.test(cmd) || cmd.includes('stop') || cmd.includes('kill') || cmd.includes('deactivate') || cmd.includes('shutdown');
       
@@ -113,43 +148,32 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
       const isOn = /\bon\b/.test(cmd) || cmd.includes('start') || cmd.includes('active') || cmd.includes('enable') || cmd.includes('engage');
 
       if (isOff) {
-        console.log("Detected OFF command");
         commandFn(relayId, 'off');
         setFeedback(`Turning OFF ${targetName}`);
         setTimeout(() => setFeedback(null), 3000);
       } else if (isOn) {
-        console.log("Detected ON command");
         commandFn(relayId, 'on');
         setFeedback(`Turning ON ${targetName}`);
         setTimeout(() => setFeedback(null), 3000);
-      } else {
-        console.log("Could not determine action (ON/OFF) from command");
       }
-    } else {
-      console.log("Could not identify target device/relay from command");
     }
   };
 
   const toggleListening = () => {
     if (!isSupported) {
-      alert("Voice control requires a browser like Google Chrome, Edge, or Safari.");
+      alert("Voice control requires a browser like Google Chrome.");
       return;
     }
-
     if (!recognition) return;
 
-    try {
-      if (isListening) {
-        recognition.stop();
-      } else {
-        setError(null);
-        setFeedback(null);
-        recognition.start();
-      }
-    } catch (err) {
-      console.error("Recognition start/stop error", err);
-      // Sometimes start() is called when already started
-      setIsListening(false);
+    if (isListening) {
+      // Stop
+      isAlwaysListeningRef.current = false;
+      recognition.stop();
+    } else {
+      // Start Always Listening
+      isAlwaysListeningRef.current = true;
+      recognition.start();
     }
   };
 
@@ -165,7 +189,7 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
         
         {feedback && (
           <div className="bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm mb-2 flex items-center gap-2 backdrop-blur-md bg-opacity-90 animate-in slide-in-from-right-5 duration-300">
-            <Check className="w-4 h-4" />
+            {feedback === "I'm listening..." ? <Zap className="w-4 h-4 fill-current" /> : <Check className="w-4 h-4" />}
             <span>{feedback}</span>
           </div>
         )}
@@ -186,14 +210,14 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
           ${!isSupported 
             ? 'bg-slate-400 cursor-not-allowed grayscale' 
             : isListening 
-              ? 'bg-red-500 hover:bg-red-600 scale-110 shadow-red-500/50' 
+              ? 'bg-purple-600 hover:bg-purple-700 scale-110 shadow-purple-500/50' 
               : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/50'}
         `}
       >
         {isListening ? (
           <>
-            <span className="absolute w-full h-full rounded-full bg-red-500 animate-ping opacity-75"></span>
-            <Activity className="w-8 h-8 text-white relative z-10" />
+            <span className="absolute w-full h-full rounded-full bg-purple-500 animate-ping opacity-75"></span>
+            <Mic className="w-8 h-8 text-white relative z-10" />
           </>
         ) : !isSupported ? (
           <MicOff className="w-8 h-8 text-slate-200" />
@@ -201,6 +225,7 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
           <Mic className="w-8 h-8 text-white" />
         )}
       </button>
+      {isListening && <div className="text-xs font-bold text-purple-600 bg-white px-2 py-1 rounded-full shadow-sm mt-1">Listening for "Hey Mewmew"</div>}
     </div>
   );
 };
