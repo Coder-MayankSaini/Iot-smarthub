@@ -16,8 +16,3 @@ export interface AppSettings {
   ipAddress: string;
   useDemoMode: boolean;
 }
-
-export interface EnergyData {
-  time: string;
-  usage: number;
-}

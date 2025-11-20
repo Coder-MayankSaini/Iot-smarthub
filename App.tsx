@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Settings, Wifi, Loader2, AlertTriangle, Monitor, Info } from 'lucide-react';
-import { Relay, ConnectionStatus, AppSettings, EnergyData } from './types';
+import { Relay, ConnectionStatus, AppSettings } from './types';
 import RelayCard from './components/RelayCard';
 import VoiceControl from './components/VoiceControl';
-import EnergyChart from './components/EnergyChart';
 import { fetchRelayStatus, toggleRelayRequest, updateLcdText } from './services/esp32';
 
 const DEFAULT_IP = "172.16.234.150";
@@ -24,7 +23,6 @@ const App: React.FC = () => {
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(ConnectionStatus.CONNECTING);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [energyData, setEnergyData] = useState<EnergyData[]>([]);
   
   // New state to track if we are online but blocked by CORS (cannot read status)
   const [isCorsRestricted, setIsCorsRestricted] = useState(false);
@@ -32,37 +30,6 @@ const App: React.FC = () => {
   // LCD State
   const [lcdText, setLcdText] = useState('');
   const [isSendingLcd, setIsSendingLcd] = useState(false);
-
-  // Generate mock energy data
-  useEffect(() => {
-    const generateData = () => {
-      const now = new Date();
-      const data: EnergyData[] = [];
-      for (let i = 6; i >= 0; i--) {
-        const time = new Date(now.getTime() - i * 60000);
-        data.push({
-          time: time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          usage: Math.floor(Math.random() * 40) + 20 + (relays.filter(r => r.state).length * 50),
-        });
-      }
-      return data;
-    };
-    setEnergyData(generateData());
-
-    const interval = setInterval(() => {
-      setEnergyData(prev => {
-        const newData = [...prev.slice(1)];
-        const now = new Date();
-        newData.push({
-          time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          usage: Math.floor(Math.random() * 40) + 20 + (relays.filter(r => r.state).length * 50),
-        });
-        return newData;
-      });
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [relays]); // Update base load when relays change
 
   // Polling Logic
   const syncStatus = useCallback(async () => {
@@ -231,11 +198,6 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
-
-        {/* Stats Section */}
-        <section>
-          <EnergyChart data={energyData} />
-        </section>
 
         {/* LCD Control Section */}
         <section>
