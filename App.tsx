@@ -17,9 +17,9 @@ const App: React.FC = () => {
   
   const [relays, setRelays] = useState<Relay[]>([
     { id: 0, name: 'Living Room Light', state: false, isLoading: false },
-    { id: 1, name: 'Bedroom Fan', state: false, isLoading: false },
-    { id: 2, name: 'Kitchen Socket', state: false, isLoading: false },
-    { id: 3, name: 'Garden Pump', state: false, isLoading: false },
+    { id: 1, name: 'Bedroom Light', state: false, isLoading: false },
+    { id: 2, name: 'Kitchen Light', state: false, isLoading: false },
+    { id: 3, name: 'Bedroom Fan', state: false, isLoading: false },
   ]);
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(ConnectionStatus.CONNECTING);
@@ -330,12 +330,15 @@ const App: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <span className="text-sm font-medium text-slate-700">Demo Mode</span>
+                <div>
+                  <span className="block font-medium text-slate-900">Demo Mode</span>
+                  <span className="text-xs text-slate-500">Simulate connection for UI testing</span>
+                </div>
                 <button 
                   onClick={() => setSettings(s => ({...s, useDemoMode: !s.useDemoMode}))}
-                  className={`w-11 h-6 flex items-center rounded-full px-1 transition-colors ${settings.useDemoMode ? 'bg-blue-600' : 'bg-slate-300'}`}
+                  className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-0.5 ${settings.useDemoMode ? 'bg-blue-600' : 'bg-slate-300'}`}
                 >
-                  <div className={`w-4 h-4 bg-white rounded-full transition-transform ${settings.useDemoMode ? 'translate-x-5' : 'translate-x-0'}`} />
+                  <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${settings.useDemoMode ? 'translate-x-5' : 'translate-x-0'}`} />
                 </button>
               </div>
             </div>
@@ -343,9 +346,18 @@ const App: React.FC = () => {
             <div className="mt-6 flex justify-end gap-3">
               <button 
                 onClick={() => setIsSettingsOpen(false)}
-                className="px-4 py-2 text-slate-600 hover:text-slate-800 font-medium transition-colors"
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium"
               >
-                Done
+                Close
+              </button>
+              <button 
+                onClick={() => {
+                  setIsSettingsOpen(false);
+                  syncStatus();
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
+              >
+                Save Changes
               </button>
             </div>
           </div>
@@ -353,6 +365,6 @@ const App: React.FC = () => {
       )}
     </div>
   );
-}
+};
 
 export default App;
