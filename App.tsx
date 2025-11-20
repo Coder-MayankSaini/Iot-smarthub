@@ -11,7 +11,7 @@ const App: React.FC = () => {
   // App State
   const [settings, setSettings] = useState<AppSettings>({
     ipAddress: DEFAULT_IP,
-    useDemoMode: true, // Default to demo so user sees UI immediately
+    useDemoMode: false, // Default to false so it tries to connect
   });
   
   const [relays, setRelays] = useState<Relay[]>([
@@ -79,18 +79,24 @@ const App: React.FC = () => {
 
   // Handlers
   const handleToggle = async (id: number) => {
+    console.log(`Toggling relay ${id}. Demo Mode: ${settings.useDemoMode}`);
+    
     // Optimistic UI update
     setRelays(prev => prev.map(r => r.id === id ? { ...r, state: !r.state } : r));
 
     if (!settings.useDemoMode) {
       try {
+        console.log(`Sending request to ${settings.ipAddress}...`);
         await toggleRelayRequest(settings.ipAddress, id);
+        console.log(`Request sent successfully.`);
+        
         // If we are fully connected, we could sync immediately.
         // If restricted, we rely on the optimistic update above.
         if (!isCorsRestricted) {
              setTimeout(syncStatus, 500); 
         }
       } catch (error) {
+        console.error("Toggle request failed:", error);
         // Revert on failure
         setRelays(prev => prev.map(r => r.id === id ? { ...r, state: !r.state } : r));
         alert("Failed to toggle relay. Check connection.");

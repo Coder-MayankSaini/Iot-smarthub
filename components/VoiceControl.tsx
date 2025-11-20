@@ -53,6 +53,7 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
       recognitionInstance.onresult = (event: any) => {
         const current = event.resultIndex;
         const cmd = event.results[current][0].transcript.toLowerCase();
+        console.log("Voice command received:", cmd);
         setTranscript(cmd);
         processCommand(cmd);
         
