@@ -1,0 +1,7 @@
+{
+  "name": "ESP32 SmartHub",
+  "description": "A modern, responsive dashboard for controlling ESP32-based relays with voice command integration and real-time status monitoring.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
