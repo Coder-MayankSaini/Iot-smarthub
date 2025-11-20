@@ -96,13 +96,14 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
     }
 
     if (relayId !== -1) {
-      if (cmd.includes('on') || cmd.includes('start') || cmd.includes('active')) {
-        onCommand(relayId, 'on');
-        setFeedback(`Turning ON ${targetName}`);
-        setTimeout(() => setFeedback(null), 3000);
-      } else if (cmd.includes('off') || cmd.includes('stop') || cmd.includes('kill')) {
+      // Check for OFF commands first to avoid false positives with "on" inside words (like "one")
+      if (/\boff\b/.test(cmd) || cmd.includes('stop') || cmd.includes('kill') || cmd.includes('deactivate')) {
         onCommand(relayId, 'off');
         setFeedback(`Turning OFF ${targetName}`);
+        setTimeout(() => setFeedback(null), 3000);
+      } else if (/\bon\b/.test(cmd) || cmd.includes('start') || cmd.includes('active') || cmd.includes('enable')) {
+        onCommand(relayId, 'on');
+        setFeedback(`Turning ON ${targetName}`);
         setTimeout(() => setFeedback(null), 3000);
       }
     }

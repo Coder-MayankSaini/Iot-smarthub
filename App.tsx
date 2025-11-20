@@ -128,9 +128,16 @@ const App: React.FC = () => {
   const handleVoiceCommand = (id: number, action: 'on' | 'off') => {
     const relay = relays.find(r => r.id === id);
     if (relay) {
+      console.log(`Voice Command: ${action.toUpperCase()} Relay ${id} (${relay.name}). Current State: ${relay.state ? 'ON' : 'OFF'}`);
+      
+      // Only toggle if the state is different from the requested action
       const shouldToggle = (action === 'on' && !relay.state) || (action === 'off' && relay.state);
+      
       if (shouldToggle) {
+        console.log("State mismatch. Executing toggle...");
         handleToggle(id);
+      } else {
+        console.log("State matches request. Ignoring.");
       }
     }
   };
