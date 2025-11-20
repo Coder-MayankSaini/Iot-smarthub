@@ -26,6 +26,7 @@ const App: React.FC = () => {
   
   // New state to track if we are online but blocked by CORS (cannot read status)
   const [isCorsRestricted, setIsCorsRestricted] = useState(false);
+  const lastCommandTime = React.useRef(0);
   
   // LCD State
   const [lcdText, setLcdText] = useState('');
@@ -37,6 +38,11 @@ const App: React.FC = () => {
       setConnectionStatus(ConnectionStatus.CONNECTED);
       setIsCorsRestricted(false);
       return;
+    }
+    
+    // Don't poll if we just sent a command (prevents flooding single-threaded ESP32)
+    if (Date.now() - lastCommandTime.current < 2000) {
+        return;
     }
 
     // Avoid flickering "Connecting..." if we are just polling in background, 
@@ -86,6 +92,7 @@ const App: React.FC = () => {
 
     if (!settings.useDemoMode) {
       try {
+        lastCommandTime.current = Date.now(); // Mark command time
         console.log(`Sending request to ${settings.ipAddress}...`);
         await toggleRelayRequest(settings.ipAddress, id);
         console.log(`Request sent successfully.`);

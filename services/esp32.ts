@@ -53,15 +53,16 @@ export const fetchRelayStatus = async (ip: string): Promise<boolean[] | null> =>
     const text = await response.text();
     return parseRelayStatus(text);
   } catch (error) {
-    // Fallback: Check if device is reachable even if we can't read data (CORS error)
+      // Fallback: Check if device is reachable even if we can't read data (CORS error)
     // This handles the case where commands work (fire-and-forget) but reading status fails.
     try {
+      // Short timeout for the fallback ping
       const controllerFallback = new AbortController();
-      const idFallback = setTimeout(() => controllerFallback.abort(), 2000);
+      const idFallback = setTimeout(() => controllerFallback.abort(), 1000); // Reduced to 1s
       
       await fetch(`${baseUrl}/`, { 
           method: 'GET', 
-          mode: 'no-cors', // Opaque response, allows cross-origin without headers
+          mode: 'no-cors', // Opaque response
           signal: controllerFallback.signal,
           cache: 'no-cache'
       });
@@ -69,7 +70,6 @@ export const fetchRelayStatus = async (ip: string): Promise<boolean[] | null> =>
 
       // If this succeeds, we are connected but blocked from reading. 
       // Return null to indicate "Online but blind".
-      console.warn("ESP32 is reachable but blocking status reads (CORS). Toggles will work.");
       return null; 
     } catch (pingError) {
       // If this also fails, we are truly offline
