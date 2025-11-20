@@ -82,20 +82,36 @@ export const fetchRelayStatus = async (ip: string): Promise<boolean[] | null> =>
 export const toggleRelayRequest = async (ip: string, relayIndex: number): Promise<void> => {
   // The C++ code expects /toggle?r=0
   // It returns a 303 redirect to /, which fetch follows automatically usually.
-  try {
+  
+  // Use Image Beacon trick to completely bypass CORS/Preflight for simple GETs
+  // This is robust for fire-and-forget actions
+  return new Promise((resolve, reject) => {
     const baseUrl = getBaseUrl(ip);
-    const url = `${baseUrl}/toggle?r=${relayIndex}`;
-    console.log(`[ESP32] Toggling: ${url}`);
+    const url = `${baseUrl}/toggle?r=${relayIndex}&t=${Date.now()}`; // Add timestamp to prevent caching
+    console.log(`[ESP32] Toggling via Beacon: ${url}`);
     
-    await fetch(url, {
-      method: 'GET',
-      mode: 'no-cors', // Often fire-and-forget for IoT if CORS is strict
-      keepalive: true,
-    });
-  } catch (error) {
-    console.error(`Failed to toggle relay ${relayIndex} at ${ip}`, error);
-    throw error;
-  }
+    const img = new Image();
+    
+    // Image onload/onerror events work even cross-origin usually, 
+    // but some browsers suppress them for private network access.
+    // Since we just want to send the packet, we assume success if no immediate error.
+    
+    img.onload = () => {
+        console.log("Beacon loaded");
+        resolve();
+    };
+    
+    img.onerror = (e) => {
+        // Even on 404 or CORS block, the request usually hits the server.
+        console.log("Beacon error/blocked (expected for CORS), but packet sent.");
+        resolve(); 
+    };
+
+    img.src = url;
+    
+    // Auto-resolve after short delay because image events might be suppressed
+    setTimeout(() => resolve(), 100);
+  });
 };
 
 export const updateLcdText = async (ip: string, text: string): Promise<void> => {
