@@ -21,6 +21,12 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(true);
 
+  // Store onCommand in a ref so the event listener always accesses the current version
+  const onCommandRef = React.useRef(onCommand);
+  useEffect(() => {
+    onCommandRef.current = onCommand;
+  }, [onCommand]);
+
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -55,7 +61,9 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
         const cmd = event.results[current][0].transcript.toLowerCase();
         console.log("Voice command received:", cmd);
         setTranscript(cmd);
-        processCommand(cmd);
+        
+        // Use the ref here to get the latest parsing logic (and latest state closure from App)
+        processCommand(cmd, onCommandRef.current);
         
         // Clear transcript after a delay
         setTimeout(() => setTranscript(''), 3000);
@@ -69,7 +77,7 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const processCommand = useCallback((cmd: string) => {
+  const processCommand = (cmd: string, commandFn: (relayId: number, action: 'on' | 'off') => void) => {
     let relayId = -1;
     let targetName = 'Device';
 
@@ -99,21 +107,19 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
       console.log(`Processing command for Relay ${relayId}. Transcript: "${cmd}"`);
       
       // Enhanced OFF detection
-      // Matches: "off", "turn off", "switch off", "stop", "kill", "deactivate", "shutdown", "of" (common misinterpretation)
       const isOff = /\boff\b/.test(cmd) || /\bof\b/.test(cmd) || cmd.includes('stop') || cmd.includes('kill') || cmd.includes('deactivate') || cmd.includes('shutdown');
       
       // Enhanced ON detection
-      // Matches: "on", "turn on", "switch on", "start", "active", "enable", "engage"
       const isOn = /\bon\b/.test(cmd) || cmd.includes('start') || cmd.includes('active') || cmd.includes('enable') || cmd.includes('engage');
 
       if (isOff) {
         console.log("Detected OFF command");
-        onCommand(relayId, 'off');
+        commandFn(relayId, 'off');
         setFeedback(`Turning OFF ${targetName}`);
         setTimeout(() => setFeedback(null), 3000);
       } else if (isOn) {
         console.log("Detected ON command");
-        onCommand(relayId, 'on');
+        commandFn(relayId, 'on');
         setFeedback(`Turning ON ${targetName}`);
         setTimeout(() => setFeedback(null), 3000);
       } else {
@@ -122,7 +128,7 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
     } else {
       console.log("Could not identify target device/relay from command");
     }
-  }, [onCommand]);
+  };
 
   const toggleListening = () => {
     if (!isSupported) {
