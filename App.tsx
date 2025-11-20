@@ -232,20 +232,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Restricted Access Warning */}
-        {!settings.useDemoMode && isCorsRestricted && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex items-start gap-3">
-            <Info className="w-5 h-5 text-yellow-600 mt-0.5" />
-            <div>
-              <h3 className="font-semibold text-yellow-900">Partial Connection</h3>
-              <p className="text-sm text-yellow-700 mt-1">
-                Commands are working, but relay status cannot be read due to browser security (CORS). 
-                Buttons will update blindly. Update ESP32 code to fix full sync.
-              </p>
-            </div>
-          </div>
-        )}
-
         {/* Stats Section */}
         <section>
           <EnergyChart data={energyData} />
