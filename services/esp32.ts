@@ -25,12 +25,11 @@ export const parseRelayStatus = (html: string): boolean[] => {
   return states;
 };
 
-export const fetchRelayStatus = async (ip: string): Promise<boolean[]> => {
+export const fetchRelayStatus = async (ip: string): Promise<boolean[] | null> => {
+  const baseUrl = getBaseUrl(ip);
+  
   try {
-    const baseUrl = getBaseUrl(ip);
-    
-    // In a real scenario without a proxy, this might hit CORS issues if the ESP32
-    // doesn't send Access-Control-Allow-Origin headers.
+    // Try full CORS request first to get data
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), 3000); // 3s timeout
 
@@ -54,8 +53,29 @@ export const fetchRelayStatus = async (ip: string): Promise<boolean[]> => {
     const text = await response.text();
     return parseRelayStatus(text);
   } catch (error) {
-    console.error(`Failed to fetch ESP32 status from ${ip}. \nPossible causes:\n1. ESP32 is offline.\n2. CORS is not enabled on ESP32 (Check Arduino code).\n3. Mixed Content (HTTPS calling HTTP).`, error);
-    throw error;
+    // Fallback: Check if device is reachable even if we can't read data (CORS error)
+    // This handles the case where commands work (fire-and-forget) but reading status fails.
+    try {
+      const controllerFallback = new AbortController();
+      const idFallback = setTimeout(() => controllerFallback.abort(), 2000);
+      
+      await fetch(`${baseUrl}/`, { 
+          method: 'GET', 
+          mode: 'no-cors', // Opaque response, allows cross-origin without headers
+          signal: controllerFallback.signal,
+          cache: 'no-cache'
+      });
+      clearTimeout(idFallback);
+
+      // If this succeeds, we are connected but blocked from reading. 
+      // Return null to indicate "Online but blind".
+      console.warn("ESP32 is reachable but blocking status reads (CORS). Toggles will work.");
+      return null; 
+    } catch (pingError) {
+      // If this also fails, we are truly offline
+      console.error(`Failed to fetch ESP32 status from ${ip}.`, error);
+      throw error;
+    }
   }
 };
 
@@ -80,7 +100,6 @@ export const updateLcdText = async (ip: string, text: string): Promise<void> => 
     const baseUrl = getBaseUrl(ip);
     
     // The ESP32 code uses: server.on("/lcd", HTTP_POST, handleLCD);
-    // It reads parameters using server.arg("text").
     // We must send a POST request with x-www-form-urlencoded body.
     const body = new URLSearchParams();
     body.append('text', text);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Settings, Wifi, WifiOff, Loader2, AlertTriangle, Monitor } from 'lucide-react';
+import { Settings, Wifi, Loader2, AlertTriangle, Monitor, Info } from 'lucide-react';
 import { Relay, ConnectionStatus, AppSettings, EnergyData } from './types';
 import RelayCard from './components/RelayCard';
 import VoiceControl from './components/VoiceControl';
@@ -25,6 +25,9 @@ const App: React.FC = () => {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(ConnectionStatus.CONNECTING);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [energyData, setEnergyData] = useState<EnergyData[]>([]);
+  
+  // New state to track if we are online but blocked by CORS (cannot read status)
+  const [isCorsRestricted, setIsCorsRestricted] = useState(false);
   
   // LCD State
   const [lcdText, setLcdText] = useState('');
@@ -65,23 +68,41 @@ const App: React.FC = () => {
   const syncStatus = useCallback(async () => {
     if (settings.useDemoMode) {
       setConnectionStatus(ConnectionStatus.CONNECTED);
+      setIsCorsRestricted(false);
       return;
     }
 
+    // Avoid flickering "Connecting..." if we are just polling in background, 
+    // but show it if we were offline.
+    if (connectionStatus === ConnectionStatus.ERROR || connectionStatus === ConnectionStatus.DISCONNECTED) {
+       setConnectionStatus(ConnectionStatus.CONNECTING);
+    }
+
     try {
-      setConnectionStatus(ConnectionStatus.CONNECTING);
       const states = await fetchRelayStatus(settings.ipAddress);
-      setRelays(prev => prev.map((r, idx) => ({
-        ...r,
-        state: states[idx] ?? false,
-        isLoading: false
-      })));
-      setConnectionStatus(ConnectionStatus.CONNECTED);
+      
+      if (states === null) {
+        // Reachable, but CORS blocked reading.
+        // We consider this "Connected" so the user can use buttons, but we flag it as restricted.
+        setIsCorsRestricted(true);
+        setConnectionStatus(ConnectionStatus.CONNECTED);
+        // We do NOT update 'relays' state here, preserving our optimistic local state.
+      } else {
+        // Fully functional
+        setIsCorsRestricted(false);
+        setRelays(prev => prev.map((r, idx) => ({
+          ...r,
+          state: states[idx] ?? false,
+          isLoading: false
+        })));
+        setConnectionStatus(ConnectionStatus.CONNECTED);
+      }
     } catch (err) {
       console.error(err);
       setConnectionStatus(ConnectionStatus.ERROR);
+      setIsCorsRestricted(false);
     }
-  }, [settings.ipAddress, settings.useDemoMode]);
+  }, [settings.ipAddress, settings.useDemoMode, connectionStatus]);
 
   useEffect(() => {
     syncStatus();
@@ -97,8 +118,11 @@ const App: React.FC = () => {
     if (!settings.useDemoMode) {
       try {
         await toggleRelayRequest(settings.ipAddress, id);
-        // Optional: Fetch immediately after toggle to confirm
-        // setTimeout(syncStatus, 500); 
+        // If we are fully connected, we could sync immediately.
+        // If restricted, we rely on the optimistic update above.
+        if (!isCorsRestricted) {
+             setTimeout(syncStatus, 500); 
+        }
       } catch (error) {
         // Revert on failure
         setRelays(prev => prev.map(r => r.id === id ? { ...r, state: !r.state } : r));
@@ -157,18 +181,19 @@ const App: React.FC = () => {
             {/* Status Indicator */}
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border ${
               connectionStatus === ConnectionStatus.CONNECTED 
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                ? (isCorsRestricted ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200')
                 : connectionStatus === ConnectionStatus.ERROR
                 ? 'bg-red-50 text-red-700 border-red-200'
                 : 'bg-amber-50 text-amber-700 border-amber-200'
             }`}>
               <div className={`w-2 h-2 rounded-full ${
-                connectionStatus === ConnectionStatus.CONNECTED ? 'bg-emerald-500' : 
-                connectionStatus === ConnectionStatus.ERROR ? 'bg-red-500' : 'bg-amber-500 animate-pulse'
+                connectionStatus === ConnectionStatus.CONNECTED 
+                    ? (isCorsRestricted ? 'bg-yellow-500' : 'bg-emerald-500')
+                    : connectionStatus === ConnectionStatus.ERROR ? 'bg-red-500' : 'bg-amber-500 animate-pulse'
               }`} />
               <span className="hidden sm:inline">
                 {settings.useDemoMode ? 'Demo Mode' : 
-                 connectionStatus === ConnectionStatus.CONNECTED ? 'Online' : 
+                 connectionStatus === ConnectionStatus.CONNECTED ? (isCorsRestricted ? 'Restricted' : 'Online') : 
                  connectionStatus === ConnectionStatus.ERROR ? 'Offline' : 'Connecting'}
               </span>
             </div>
@@ -202,6 +227,20 @@ const App: React.FC = () => {
                 >
                   Switch to Demo Mode
                 </button> to test UI.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Restricted Access Warning */}
+        {!settings.useDemoMode && isCorsRestricted && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex items-start gap-3">
+            <Info className="w-5 h-5 text-yellow-600 mt-0.5" />
+            <div>
+              <h3 className="font-semibold text-yellow-900">Partial Connection</h3>
+              <p className="text-sm text-yellow-700 mt-1">
+                Commands are working, but relay status cannot be read due to browser security (CORS). 
+                Buttons will update blindly. Update ESP32 code to fix full sync.
               </p>
             </div>
           </div>
@@ -290,42 +329,4 @@ const App: React.FC = () => {
                 />
               </div>
 
-              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <div>
-                  <span className="block font-medium text-slate-900">Demo Mode</span>
-                  <span className="text-xs text-slate-500">Simulate connection for UI testing</span>
-                </div>
-                <button 
-                  onClick={() => setSettings(s => ({...s, useDemoMode: !s.useDemoMode}))}
-                  className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-0.5 ${settings.useDemoMode ? 'bg-blue-600' : 'bg-slate-300'}`}
-                >
-                  <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${settings.useDemoMode ? 'translate-x-5' : 'translate-x-0'}`} />
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button 
-                onClick={() => setIsSettingsOpen(false)}
-                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium"
-              >
-                Close
-              </button>
-              <button 
-                onClick={() => {
-                  setIsSettingsOpen(false);
-                  syncStatus();
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
-              >
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default App;
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border
