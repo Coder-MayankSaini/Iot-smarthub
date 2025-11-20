@@ -6,7 +6,7 @@ import VoiceControl from './components/VoiceControl';
 import EnergyChart from './components/EnergyChart';
 import { fetchRelayStatus, toggleRelayRequest } from './services/esp32';
 
-const DEFAULT_IP = "10.105.117.150";
+const DEFAULT_IP = "172.16.234.150";
 
 const App: React.FC = () => {
   // App State
