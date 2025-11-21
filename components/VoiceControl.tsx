@@ -151,6 +151,7 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
   }, []);
 
   const checkForWakeWord = (text: string): boolean => {
+      console.log("Checking wake word in:", text);
       // Wake word variations - Broadened to catch misinterpretations
       const patterns = [
           /hey\s+mew/i,       // Catch "hey mew"
@@ -159,11 +160,18 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
           /hey\s+you/i,       // Catch "hey you" (common mishear)
           /hey\s+me/i,        // Catch "hey me"
           /hey\s+menu/i,      // Catch "hey menu"
-          /mew\s*mew/i,       // Just "mew mew" without hey
+          /mew\s*mew/i,       // Just "mew mew"
+          /meow\s*meow/i,     // "meow meow"
+          /hey\s+meow/i,      // "hey meow"
+          /hi\s+mew/i,
           /hello\s+mew/i,
-          /ok\s+mew/i
+          /ok\s+mew/i,
+          /hey\s+may/i,       // "hey may"
+          /hey\s+man/i        // "hey man" (sometimes heard)
       ];
-      return patterns.some(p => p.test(text));
+      const match = patterns.some(p => p.test(text));
+      if (match) console.log("Wake word MATCHED!");
+      return match;
   };
 
   const processCommand = (cmd: string, commandFn: (relayId: number, action: 'on' | 'off') => void) => {
