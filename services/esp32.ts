@@ -115,22 +115,52 @@ export const toggleRelayRequest = async (ip: string, relayIndex: number): Promis
 };
 
 export const updateLcdText = async (ip: string, text: string): Promise<void> => {
-  // Use Image Beacon for LCD as well to avoid CORS Preflight (OPTIONS) requests.
-  // Preflight requests often confuse simple ESP32 web servers, causing them to 
-  // read empty/garbage data and display it on the LCD.
-  return new Promise((resolve, reject) => {
-    const baseUrl = getBaseUrl(ip);
-    const encodedText = encodeURIComponent(text);
-    const url = `${baseUrl}/lcd?text=${encodedText}&t=${Date.now()}`;
+  // Use a hidden HTML Form to send a POST request.
+  // This bypasses CORS Preflight (OPTIONS) requests completely, ensuring the ESP32
+  // receives a standard POST request without getting confused by browser handshake data.
+  return new Promise((resolve) => {
+    const iframeName = `lcd_iframe_${Date.now()}`;
     
-    console.log(`[ESP32] Sending LCD Text via Beacon: ${url}`);
-    
-    const img = new Image();
-    img.onload = () => resolve();
-    img.onerror = () => resolve(); // Assume success on error (CORS block)
-    img.src = url;
-    
-    setTimeout(() => resolve(), 100);
+    // Create hidden iframe to be the target of the form (prevents page reload)
+    const iframe = document.createElement('iframe');
+    iframe.name = iframeName;
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+
+    // Create form
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `${getBaseUrl(ip)}/lcd`;
+    form.target = iframeName;
+    form.style.display = 'none';
+
+    // Add input field
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'text';
+    input.value = text;
+    form.appendChild(input);
+
+    document.body.appendChild(form);
+
+    // Submit the form
+    try {
+        form.submit();
+        console.log(`[ESP32] Sent LCD POST via Hidden Form: "${text}"`);
+    } catch (e) {
+        console.error("Form submit failed", e);
+    }
+
+    // Cleanup DOM elements after a short delay
+    setTimeout(() => {
+      try {
+          document.body.removeChild(form);
+          document.body.removeChild(iframe);
+      } catch (e) {
+          // Ignore cleanup errors
+      }
+      resolve();
+    }, 200);
   });
 };
 
