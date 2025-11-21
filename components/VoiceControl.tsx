@@ -154,23 +154,36 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
       console.log("Checking wake word in:", text);
       // Wake word variations - Broadened to catch misinterpretations
       const patterns = [
-          /hey\s+mew/i,       // Catch "hey mew"
-          /hey\s+mu/i,        // Catch "hey mu"
-          /hey\s+new/i,       // Catch "hey new"
-          /hey\s+you/i,       // Catch "hey you" (common mishear)
-          /hey\s+me/i,        // Catch "hey me"
-          /hey\s+menu/i,      // Catch "hey menu"
-          /mew\s*mew/i,       // Just "mew mew"
-          /meow\s*meow/i,     // "meow meow"
-          /hey\s+meow/i,      // "hey meow"
+          // Original Identity Triggers
+          /hey\s+mew/i,       
+          /hey\s+mu/i,        
+          /hey\s+new/i,       
+          /hey\s+you/i,       
+          /hey\s+me/i,        
+          /hey\s+menu/i,      
+          /mew\s*mew/i,       
+          /meow\s*meow/i,     
+          /hey\s+meow/i,      
           /hi\s+mew/i,
           /hello\s+mew/i,
           /ok\s+mew/i,
-          /hey\s+may/i,       // "hey may"
-          /hey\s+man/i        // "hey man" (sometimes heard)
+          /hey\s+may/i,       
+          /hey\s+man/i,
+
+          // Direct Command Triggers (Allows commands without "Hey Mewmew" if they start with action)
+          /^turn\s+on/i,
+          /^turn\s+off/i,
+          /^switch\s+on/i,
+          /^switch\s+off/i,
+          /^turn\s+of/i,      // "turn of" typo
+          /^turn\s+onn/i,     // "turn onn" typo
+          /^on\s+/i,          // Starts with "on" (e.g. "on bedroom fan")
+          /^off\s+/i,         // Starts with "off"
+          /^start\s+/i,
+          /^stop\s+/i
       ];
       const match = patterns.some(p => p.test(text));
-      if (match) console.log("Wake word MATCHED!");
+      if (match) console.log("Wake word (or Direct Command) MATCHED!");
       return match;
   };
 
@@ -204,7 +217,7 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onCommand }) => {
       const isOff = /\boff\b/.test(cmd) || /\bof\b/.test(cmd) || cmd.includes('stop') || cmd.includes('kill') || cmd.includes('deactivate') || cmd.includes('shutdown');
       
       // Enhanced ON detection
-      const isOn = /\bon\b/.test(cmd) || cmd.includes('start') || cmd.includes('active') || cmd.includes('enable') || cmd.includes('engage');
+      const isOn = /\bon\b/.test(cmd) || /\bonn\b/.test(cmd) || cmd.includes('start') || cmd.includes('active') || cmd.includes('enable') || cmd.includes('engage');
 
       if (isOff) {
         commandFn(relayId, 'off');
